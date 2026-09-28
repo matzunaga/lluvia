@@ -10,9 +10,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 header{position:fixed;left:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 28px) 28px 0;color:var(--ink);pointer-events:none}
 h1{margin:0;font:400 30px/1 "Iowan Old Style",Palatino,"Palatino Linotype",Georgia,serif;letter-spacing:.01em}
 p{margin:10px 0 0;font:10px/1.4 "SF Mono",Menlo,Consolas,monospace;letter-spacing:.14em;color:var(--muted)}
+.snd{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);min-height:44px;padding:8px 14px;border:0;background:transparent;color:var(--muted);font:10px/1 "SF Mono",Menlo,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.snd[aria-pressed="true"]{color:var(--ink)}
+.snd:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
 </style></head><body>
 <canvas id="c" aria-label="San Diego skyline at night in the rain"></canvas>
 <header><h1>Lluvia</h1><p>SAN DIEGO, CALIFORNIA</p></header>
+<button class="snd" id="snd" type="button" aria-pressed="false">Sound: Off</button>
 <script>
 (()=>{
 // ===== Tunables =====
@@ -20,16 +24,23 @@ const PAN_SECONDS=200;       // one way across the skyline
 const BOLT_MIN=14, BOLT_MAX=42; // seconds between lightning strikes
 const RAIN_DENSITY=1/700;    // drops per square pixel of screen
 const MAX_DPR=2;
+// The smallest lights, in the distant districts, fade on and off at random
+const TWINKLES=170;             // how many of them, on a phone-sized screen; scales with width
+const TWINKLE_ON=[6,40];        // seconds a light stays on, shortest to longest
+const TWINKLE_OFF=[8,60];       // seconds it stays off
+const TWINKLE_FADE=[1.5,3.5];   // seconds it takes to fade in or out
+// Rain sound
+const SOUND_FILE='rain.mp3?v=1';
+const SOUND_LEVEL=.8, SOUND_IN=6, SOUND_OUT=1.5, LOOP_XFADE=4, LOOP_TRIM=.25;
 // Skyline traced from photographs of downtown San Diego seen across the bay; units are photo pixels.
 const POLY=[[0.0, 286.0], [0.0, 233.0], [1.0, 231.33], [16.0, 231.33], [16.0, 234.33], [19.0, 234.33], [19.0, 242.33], [23.33, 242.33], [23.33, 256.67], [29.0, 258.0], [29.0, 262.0], [33.33, 262.0], [33.33, 258.67], [47.67, 258.67], [47.67, 245.67], [53.0, 244.0], [54.0, 241.33], [60.33, 240.0], [62.33, 237.33], [62.33, 217.0], [65.33, 215.0], [65.33, 211.33], [73.33, 211.33], [74.67, 214.33], [78.67, 214.33], [78.67, 224.0], [78.67, 245.0], [81.67, 247.67], [83.33, 247.67], [83.33, 245.0], [84.33, 245.0], [84.33, 228.67], [94.67, 228.67], [94.67, 222.0], [99.67, 220.67], [105.33, 220.67], [109.67, 217.67], [113.67, 217.67], [114.33, 218.67], [117.33, 218.67], [124.0, 224.0], [124.0, 238.67], [135.0, 242.0], [135.0, 252.33], [143.67, 252.33], [143.67, 250.0], [148.33, 250.0], [148.33, 204.0], [151.33, 203.0], [151.33, 200.33], [158.67, 183.0], [176.67, 186.33], [178.67, 188.67], [185.33, 207.67], [188.0, 208.33], [188.0, 239.33], [193.0, 239.33], [193.0, 253.0], [203.67, 253.0], [205.67, 251.0], [205.67, 248.67], [210.33, 247.67], [210.33, 242.0], [212.0, 241.67], [212.0, 235.67], [218.67, 235.67], [218.67, 232.67], [223.0, 232.67], [226.67, 231.67], [226.67, 196.67], [236.67, 168.33], [238.33, 166.67], [240.67, 166.67], [240.67, 175.67], [260.67, 182.0], [268.33, 200.33], [268.33, 242.33], [283.67, 242.33], [283.67, 257.67], [300.67, 257.67], [300.67, 252.33], [304.0, 251.67], [304.0, 249.0], [308.33, 249.0], [310.33, 252.67], [318.33, 252.67], [318.33, 229.0], [319.67, 227.33], [327.67, 227.33], [327.67, 224.67], [353.33, 224.67], [353.33, 226.0], [357.67, 226.0], [357.67, 244.67], [360.0, 244.67], [360.0, 242.0], [362.33, 242.0], [363.33, 238.67], [373.33, 241.0], [373.33, 217.0], [375.67, 215.67], [375.67, 208.33], [378.67, 207.33], [386.67, 200.0], [393.33, 200.0], [393.33, 206.67], [397.67, 206.67], [397.67, 253.33], [401.33, 252.67], [401.33, 249.33], [403.0, 248.67], [403.0, 240.33], [427.33, 240.33], [427.33, 246.0], [436.33, 246.0], [436.33, 226.0], [450.33, 226.0], [450.33, 223.67], [455.67, 223.67], [456.33, 222.33], [462.67, 222.33], [463.33, 221.0], [467.0, 221.0], [467.0, 230.0], [472.67, 230.0], [474.33, 233.0], [474.33, 238.33], [481.0, 240.0], [481.0, 243.67], [487.67, 243.67], [487.67, 246.67], [504.67, 246.67], [504.67, 234.0], [509.33, 232.0], [509.33, 221.33], [513.33, 221.33], [513.33, 223.67], [532.33, 223.67], [532.33, 236.0], [534.33, 236.0], [534.33, 225.0], [540.67, 225.0], [540.67, 251.0], [546.0, 253.0], [550.67, 250.67], [550.67, 256.0], [559.0, 256.0], [559.0, 236.33], [564.33, 235.0], [570.33, 235.0], [570.33, 248.0], [591.33, 248.0], [591.33, 251.0], [594.67, 251.0], [596.33, 253.67], [599.33, 253.67], [599.33, 199.33], [604.33, 199.33], [604.33, 193.33], [611.33, 193.33], [612.67, 194.67], [612.67, 198.33], [616.33, 198.33], [617.67, 201.33], [617.67, 250.0], [633.67, 250.0], [638.67, 255.33], [648.67, 255.33], [648.67, 197.67], [650.67, 196.67], [650.67, 192.0], [660.0, 192.0], [660.0, 193.67], [662.67, 193.67], [662.67, 199.0], [665.67, 201.33], [669.67, 201.33], [669.67, 257.33], [675.33, 257.33], [676.0, 256.0], [678.67, 256.0], [679.67, 253.67], [682.0, 253.67], [682.0, 286.0]], PW=682, BASE=286, TOPMIN=Math.min(...POLY.map(p=>p[1]));
 // Neon crowns on the five tallest towers: photo-x range and color. Index 2 is the failing tube.
 const CROWNS=[[148,188,'80,225,255'],[224,270,'255,70,165'],[372,399,'255,176,80'],[596,618,'80,225,255'],[646,671,'255,70,165']];
-const WIN=['rgba(255,196,120,.8)','rgba(255,170,95,.75)','rgba(255,226,170,.8)','rgba(150,225,255,.7)','rgba(205,240,255,.7)'];
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const c=document.getElementById('c'),x=c.getContext('2d',{alpha:false});
-let W,H,DPR,WL,k,cityW,dep,L={},signs=[],flick=[],drops=[],back=[],splash=[],lights=[];
+let W,H,DPR,WL,k,cityW,dep,L={},signs=[],flick=[],drops=[],back=[],splash=[],twinkles=[];
 let seed=7;const R=()=>(seed=(seed*16807)%2147483647)/2147483647;
-// a second generator for the blinking windows, so the city's own layout stays exactly as it was
+// a second generator places the twinkling lights, so the city's own layout stays exactly as it was
 let seed2=11;const R2=()=>(seed2=(seed2*16807)%2147483647)/2147483647;
 function roofAt(px){for(let i=1;i<POLY.length;i++){const[a,b]=POLY[i-1],[c2,d]=POLY[i];if(px>=Math.min(a,c2)&&px<=Math.max(a,c2)&&a!==c2)return b+(d-b)*(px-a)/(c2-a);}return BASE;}
 function mk(w,h){const cv=document.createElement('canvas');cv.width=Math.max(1,Math.ceil(w*DPR));cv.height=Math.max(1,Math.ceil(h*DPR));const g=cv.getContext('2d');g.scale(DPR,DPR);cv.w=w;cv.h=h;return[cv,g];}
@@ -47,18 +58,24 @@ function build(){
  [L.sky,g]=mk(W,WL);gr=g.createLinearGradient(0,0,0,WL);gr.addColorStop(0,'#03040a');gr.addColorStop(.45,'#0a0e1c');gr.addColorStop(.78,'#221528');gr.addColorStop(.93,'#57292d');gr.addColorStop(1,'#84432f');g.fillStyle=gr;g.fillRect(0,0,W,WL);
  for(let i=0;i<60;i++){const yy=WL*(.2+R()*.7);g.fillStyle=`rgba(${190+R()*60|0},${90+R()*50|0},${85+R()*50|0},${.01+R()*.028*(yy/WL)})`;g.beginPath();g.ellipse(R()*W,yy,W*(.2+R()*.5),6+R()*22,0,0,7);g.fill();}
  // parallax districts
- const layer=(wid,hmin,hmax,col,lit,alpha)=>{const[cv,lg]=mk(wid,WL);lg.globalAlpha=alpha;for(let bx=-10;bx<wid;){const bw=(8+R()*22)*k*.7,bh=(hmin+R()*(hmax-hmin))*k;lg.fillStyle=col;lg.fillRect(bx,WL-bh,bw,bh);for(let yy=WL-bh+4;yy<WL;yy+=3.2*k*.55)for(let xx=bx+2;xx<bx+bw-2;xx+=2.8*k*.55)if(R()<lit){lg.fillStyle=`rgba(255,${160+R()*70|0},${110+R()*40|0},${.25+R()*.4})`;lg.fillRect(xx,yy,1.1,1);}bx+=bw+R()*3;}return cv;};
- L.far=layer(W+cityW*.3+40,30,95,'#171220',.03,.6);L.mid=layer(W+cityW*.6+40,15,55,'#0d0c16',.06,.9);
+ const layer=(wid,hmin,hmax,col,lit,alpha,rects)=>{const[cv,lg]=mk(wid,WL);lg.globalAlpha=alpha;for(let bx=-10;bx<wid;){const bw=(8+R()*22)*k*.7,bh=(hmin+R()*(hmax-hmin))*k;lg.fillStyle=col;lg.fillRect(bx,WL-bh,bw,bh);rects.push([bx,WL-bh,bw,bh]);for(let yy=WL-bh+4;yy<WL;yy+=3.2*k*.55)for(let xx=bx+2;xx<bx+bw-2;xx+=2.8*k*.55)if(R()<lit){lg.fillStyle=`rgba(255,${160+R()*70|0},${110+R()*40|0},${.25+R()*.4})`;lg.fillRect(xx,yy,1.1,1);}bx+=bw+R()*3;}return cv;};
+ const farRects=[],midRects=[];
+ L.far=layer(W+cityW*.3+40,30,95,'#171220',.03,.6,farRects);L.mid=layer(W+cityW*.6+40,15,55,'#0d0c16',.06,.9,midRects);
+ // the smallest lights: single points in the distant districts, each on its own random schedule
+ twinkles=[];const tw=Math.round(TWINKLES*Math.max(1,W/390));
+ for(let n=0;n<tw;n++){const far=R2()<.55,rects=far?farRects:midRects,[bx,by,bw,bh]=rects[R2()*rects.length|0];if(bw<5||bh<8)continue;
+  twinkles.push({far,x:bx+2+R2()*(bw-4),y:by+4+R2()*(bh-6),peak:(far?.6:.9)*(.4+R2()*.45),col:`255,${160+R2()*70|0},${110+R2()*40|0}`,on:Math.random()<.4,left:Math.random()*30,fade:0,a:0});}
+ for(const t of twinkles){t.a=t.on?1:0;}
  // the real skyline
  [L.city,g]=mk(cityW,WL);
  const P=new Path2D();P.moveTo(0,WL);for(const[a,b]of POLY)P.lineTo(a*k,WL-(BASE-b)*k);P.lineTo(cityW,WL);P.closePath();
  gr=g.createLinearGradient(0,WL-(BASE-TOPMIN)*k,0,WL);gr.addColorStop(0,'#0a0b15');gr.addColorStop(1,'#05060c');g.fillStyle=gr;g.fill(P);
  g.save();g.clip(P);
- lights=[];let start=0,prev=roofAt(0);const blocks=[];for(let px=1;px<=PW;px+=.5){const r=roofAt(px);if(Math.abs(r-prev)>3||px>=PW){blocks.push([start,px]);start=px;}prev=r;}
+ let start=0,prev=roofAt(0);const blocks=[];for(let px=1;px<=PW;px+=.5){const r=roofAt(px);if(Math.abs(r-prev)>3||px>=PW){blocks.push([start,px]);start=px;}prev=r;}
  const warm=['255,196,120','255,170,95','255,226,170'],cool=['150,225,255','205,240,255'];
  for(const[a,b]of blocks){const pal=R()<.62?warm:cool,dens=.07+R()*.26,sx=Math.max(2.2,1.5*k),sy=Math.max(3,1.9*k);const l=a*k,r=b*k,top=WL-(BASE-roofAt((a+b)/2))*k;
   g.fillStyle=`rgba(120,140,190,${.02+R()*.035})`;g.fillRect((l+r)/2,top,(r-l)/2,WL-top);g.fillStyle='rgba(0,0,0,.35)';g.fillRect(l,top,1,WL-top);
-  for(let yy=top+4;yy<WL-2;yy+=sy){if(R()<.14)continue;for(let xx=l+2;xx<r-2;xx+=sx){if(R()>=dens){if(R2()<.03)lights.push({x:xx,y:yy,w:sx*.55,h:sy*.4,c:R2()*5|0,f:.04+R2()*.18,ph:R2()*99,th:.3+R2()*.9});continue;}const col=pal[R()*pal.length|0],a=.35+R()*.6;if(R2()<.08){lights.push({x:xx,y:yy,w:sx*.55,h:sy*.4,c:R2()*5|0,f:.04+R2()*.18,ph:R2()*99,th:-.4+R2()*.9});continue;}g.fillStyle=`rgba(${col},${a})`;g.fillRect(xx,yy,sx*.55,sy*.4);}}}
+  for(let yy=top+4;yy<WL-2;yy+=sy){if(R()<.14)continue;for(let xx=l+2;xx<r-2;xx+=sx){if(R()>=dens)continue;const col=pal[R()*pal.length|0],a=.35+R()*.6;g.fillStyle=`rgba(${col},${a})`;g.fillRect(xx,yy,sx*.55,sy*.4);}}}
  g.restore();
  g.save();g.globalCompositeOperation='lighter';g.strokeStyle='rgba(255,140,110,.16)';g.lineWidth=1;g.beginPath();POLY.forEach(([a,b],i)=>i?g.lineTo(a*k,WL-(BASE-b)*k):g.moveTo(a*k,WL-(BASE-b)*k));g.stroke();
  gr=g.createLinearGradient(0,WL-26*k,0,WL);gr.addColorStop(0,'rgba(255,150,90,0)');gr.addColorStop(1,'rgba(255,150,90,.2)');g.fillStyle=gr;g.fillRect(0,WL-26*k,cityW,26*k);g.restore();
@@ -85,6 +102,9 @@ function build(){
 function newBack(any){return{x:Math.random()*(W+100)-50,y:any?Math.random()*WL:-20-Math.random()*WL*.3,l:4+Math.random()*7,v:260+Math.random()*220};}
 function newDrop(any){const z=Math.random();return{x:Math.random()*(W+200)-100,y:any?Math.random()*H:-40-Math.random()*H*.3,z,l:8+z*30,v:700+z*900};}
 let bolt=null,nextBolt=8+Math.random()*12,last=0,t0=performance.now();
+function stepTwinkles(dt){for(const t of twinkles){t.left-=dt;if(t.left<=0){t.on=!t.on;const r=t.on?TWINKLE_ON:TWINKLE_OFF,f=TWINKLE_FADE;t.left=r[0]+Math.random()*(r[1]-r[0]);t.fade=f[0]+Math.random()*(f[1]-f[0]);}
+ if(t.on&&t.a<1)t.a=Math.min(1,t.a+dt/t.fade);else if(!t.on&&t.a>0)t.a=Math.max(0,t.a-dt/t.fade);}}
+function drawTwinkles(far,shift){for(const t of twinkles){if(t.far!==far||t.a<=0)continue;const px=t.x+shift;if(px<-2||px>W+2)continue;const e=t.a*t.a*(3-2*t.a);x.fillStyle=`rgba(${t.col},${t.peak*e})`;x.fillRect(px,t.y,1.1,1);}}
 function frame(now){
  const t=(now-t0)/1000,dt=Math.min(.05,(now-(last||now))/1000);last=now;
  const span=Math.max(0,cityW-W),u=reduce?.5:.5-.5*Math.cos(t*Math.PI/PAN_SECONDS),off=-u*span;
@@ -93,14 +113,13 @@ function frame(now){
   if(bolt){const a=t-bolt.t;if(a>1.2)bolt=null;else flash=a<.08?1:a<.16?.25:a<.24?.8:Math.exp(-(a-.24)*5)*.6;}}
  x.drawImage(L.sky,0,0,W,WL);
  if(flash>0){x.fillStyle=`rgba(170,160,210,${flash*.28})`;x.fillRect(0,0,W,WL);x.strokeStyle=`rgba(230,225,255,${flash})`;x.lineWidth=1.4;x.beginPath();for(const s of bolt.seg){x.moveTo(s[0],s[1]);x.lineTo(s[2],s[3]);}x.stroke();}
- x.drawImage(L.far,off*.3,0,L.far.w,WL);
+ stepTwinkles(dt);
+ x.drawImage(L.far,off*.3,0,L.far.w,WL);drawTwinkles(true,off*.3);
  // far rain behind the city, one stroke
  x.beginPath();for(const d of back){x.moveTo(d.x,d.y);x.lineTo(d.x-d.l*.1,d.y+d.l);d.y+=d.v*dt;d.x-=d.v*dt*.1;if(d.y>WL)Object.assign(d,newBack(false));}
  x.strokeStyle=`rgba(190,205,240,${.11+flash*.2})`;x.lineWidth=.6;x.stroke();
- x.drawImage(L.mid,off*.6,0,L.mid.w,WL);
+ x.drawImage(L.mid,off*.6,0,L.mid.w,WL);drawTwinkles(false,off*.6);
  x.drawImage(L.city,off,0,cityW,WL);
- // windows switching on and off, slowly, one fill per colour
- for(let ci=0;ci<5;ci++){x.beginPath();for(const w of lights){if(w.c!==ci)continue;const wx=w.x+off;if(wx<-4||wx>W+4)continue;if(Math.sin(t*w.f+w.ph)+.6*Math.sin(t*w.f*2.7+w.ph*1.7)>w.th)x.rect(wx,w.y,w.w,w.h);}x.fillStyle=WIN[ci];x.fill();}
  // failing neon: same sprite, stuttering alpha
  x.globalCompositeOperation='lighter';
  for(const f of flick){const fx=f.x+off;if(fx>W||fx+f.cv.w<0)continue;const q=Math.sin(t*2.6+f.ph)+Math.sin(t*6.1+f.ph*2);x.globalAlpha=q>1.3?.1:1;x.drawImage(f.cv,fx,f.y,f.cv.w,f.cv.h);}
@@ -121,6 +140,26 @@ function frame(now){
  x.strokeStyle='rgba(200,225,255,.12)';x.lineWidth=.6;x.stroke();
  requestAnimationFrame(frame);
 }
+// ===== Rain sound: a real recording, looped with an equal-power crossfade so there is no seam =====
+const snd=document.getElementById('snd');let ac=null,buf=null,master=null,nextVoice=0,soundOn=false,loopTimer=0,quietTimer=0;
+const soundData=fetch(SOUND_FILE).then(r=>r.ok?r.arrayBuffer():null).catch(()=>null);
+function curve(up){const c=new Float32Array(128);for(let i=0;i<128;i++){const u=i/127;c[i]=up?Math.sin(u*Math.PI/2):Math.cos(u*Math.PI/2);}return c;}
+const XIN=curve(true),XOUT=curve(false);
+function voice(at,fadeIn){const len=buf.duration-LOOP_TRIM*2,src=ac.createBufferSource(),g=ac.createGain();src.buffer=buf;src.connect(g);g.connect(master);
+ if(fadeIn){g.gain.value=0;g.gain.setValueCurveAtTime(XIN,at,LOOP_XFADE);}g.gain.setValueCurveAtTime(XOUT,at+len-LOOP_XFADE,LOOP_XFADE);
+ src.start(at,LOOP_TRIM,len);src.onended=()=>{src.disconnect();g.disconnect();};nextVoice=at+len-LOOP_XFADE;}
+function glide(to,sec){const p=master.gain,now=ac.currentTime;if(p.cancelAndHoldAtTime)p.cancelAndHoldAtTime(now);else{const v=p.value;p.cancelScheduledValues(now);p.setValueAtTime(v,now);}p.linearRampToValueAtTime(to,now+sec);}
+async function startSound(){
+ if(!ac){try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;ac=new AC();master=ac.createGain();master.gain.value=0;master.connect(ac.destination);}
+ clearTimeout(quietTimer);ac.resume().catch(()=>{}); // inside the tap, which is what lets the browser play it
+ if(!buf){const data=await soundData;if(!data)return;try{buf=await new Promise((ok,no)=>ac.decodeAudioData(data,ok,no));}catch(e){return;}
+  voice(ac.currentTime+.1,false);loopTimer=setInterval(()=>{if(nextVoice-ac.currentTime<30)voice(nextVoice,true);},1000);}
+ if(soundOn)glide(SOUND_LEVEL,SOUND_IN);}
+function stopSound(){if(!ac||!master)return;glide(0,SOUND_OUT);clearTimeout(quietTimer);quietTimer=setTimeout(()=>{if(!soundOn)ac.suspend().catch(()=>{});},SOUND_OUT*1000+150);}
+snd.addEventListener('click',()=>{soundOn=!soundOn;snd.setAttribute('aria-pressed',String(soundOn));snd.textContent=soundOn?'Sound: On':'Sound: Off';soundOn?startSound():stopSound();});
+// iPhone can pause audio for a call or a lock; a touch picks it up again
+addEventListener('pointerdown',()=>{if(soundOn&&ac&&ac.state!=='running')ac.resume().catch(()=>{});},{passive:true});
 build();addEventListener('resize',()=>{clearTimeout(build.t);build.t=setTimeout(build,150);});
 requestAnimationFrame(frame);
 })();
