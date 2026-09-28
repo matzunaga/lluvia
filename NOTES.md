@@ -15,14 +15,17 @@ in the source photo, so they are missing. The tallest crown is approximate.
 ## Performance rules (the first version ran at about 2 fps; these fixed it)
 - Everything static is drawn once in build() into offscreen canvases:
   sky, parallax districts, city, steady neon, reflection, streaks, overlays.
-- No shadowBlur inside the frame loop. Glow is baked; failing neon is a
-  prebuilt sprite whose alpha stutters.
+- No shadowBlur inside the frame loop. Glow is baked, and all neon, including
+  the crowns, is steady.
 - Never draw the main canvas onto itself. The reflection is a prebuilt
   canvas drawn in 6-pixel bands with a sideways ripple.
 - Rain is batched: three depth layers, one stroke call each.
-- Windows are steady. The only lights that change are about 170 single
-  points in the distant districts, each fading on and off on its own random
-  schedule (TWINKLE_ON, TWINKLE_OFF, TWINKLE_FADE at the top of the script).
+- About one lit window in twenty fades on and off slowly, each on its own
+  random schedule (WINDOW_SHARE, TWINKLE_ON, TWINKLE_OFF, TWINKLE_FADE at the
+  top of the script). Every other light is steady.
+- The water has no repeating loop: the reflection wavers and the light
+  streaks sway on slow sine waves (RIPPLE_SPEED, SHIMMER_SPEED). The streaks
+  used to slide down and snap back every second, which showed as a jump.
 
 ## Sound
 rain.mp3 is "Rain" by alex36917, https://freesound.org/people/alex36917/sounds/524605/ ,
