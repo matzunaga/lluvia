@@ -20,9 +20,14 @@ in the source photo, so they are missing. The tallest crown is approximate.
 - Never draw the main canvas onto itself. The reflection is a prebuilt
   canvas drawn in 6-pixel bands with a sideways ripple.
 - Rain is batched: three depth layers, one stroke call each.
-- About one lit window in twenty fades on and off slowly, each on its own
-  random schedule (WINDOW_SHARE, TWINKLE_ON, TWINKLE_OFF, TWINKLE_FADE at the
-  top of the script). Every other light is steady.
+- About one lit window in eleven, and a few dark ones, switch on and off at
+  random, each change taking about a second, like a room light (WINDOW_SHARE,
+  DARK_SHARE, TWINKLE_ON, TWINKLE_OFF, TWINKLE_FADE at the top of the script).
+  On a phone that is about four changes a second across the visible city.
+  Every other light is steady.
+- Lightning shows in the water: the surface brightens, most near the shore,
+  and the bolt is mirrored and wavers with the ripple. It is drawn before the
+  city's reflection, so reflected towers stand in front of it.
 - The water has no repeating loop: the reflection wavers and the light
   streaks sway on slow sine waves (RIPPLE_SPEED, SHIMMER_SPEED). The streaks
   used to slide down and snap back every second, which showed as a jump.

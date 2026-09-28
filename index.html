@@ -25,10 +25,11 @@ const BOLT_MIN=14, BOLT_MAX=42; // seconds between lightning strikes
 const RAIN_DENSITY=1/700;    // drops per square pixel of screen
 const MAX_DPR=2;
 // Some of the city's windows fade on and off at random; neon and crowns stay steady
-const WINDOW_SHARE=.05;         // share of windows that switch; the rest never change
-const TWINKLE_ON=[10,60];       // seconds a window stays on, shortest to longest
-const TWINKLE_OFF=[12,80];      // seconds it stays off
-const TWINKLE_FADE=[2.5,5];     // seconds it takes to fade in or out
+const WINDOW_SHARE=.09;         // share of lit windows that switch; the rest never change
+const DARK_SHARE=.009;          // share of dark windows that sometimes come on
+const TWINKLE_ON=[4,26];        // seconds a window stays on, shortest to longest
+const TWINKLE_OFF=[4,28];       // seconds it stays off
+const TWINKLE_FADE=[.6,1.2];    // seconds it takes to switch: a room light, not a flicker
 // The water
 const RIPPLE_SPEED=.18;         // how fast the reflection wavers (was .55)
 const SHIMMER_SPEED=.25;        // how fast the light streaks sway and breathe (was .8)
@@ -72,7 +73,7 @@ function build(){
  const warm=['255,196,120','255,170,95','255,226,170'],cool=['150,225,255','205,240,255'];
  for(const[a,b]of blocks){const pal=R()<.62?warm:cool,dens=.07+R()*.26,sx=Math.max(2.2,1.5*k),sy=Math.max(3,1.9*k);const l=a*k,r=b*k,top=WL-(BASE-roofAt((a+b)/2))*k;
   g.fillStyle=`rgba(120,140,190,${.02+R()*.035})`;g.fillRect((l+r)/2,top,(r-l)/2,WL-top);g.fillStyle='rgba(0,0,0,.35)';g.fillRect(l,top,1,WL-top);
-  for(let yy=top+4;yy<WL-2;yy+=sy){if(R()<.14)continue;for(let xx=l+2;xx<r-2;xx+=sx){if(R()>=dens)continue;const col=pal[R()*pal.length|0],a=.35+R()*.6;if(R2()<WINDOW_SHARE){const on=Math.random()<.6;twinkles.push({x:xx,y:yy,w:sx*.55,h:sy*.4,col,peak:a,on,a:on?1:0,left:Math.random()*40,fade:3});continue;}g.fillStyle=`rgba(${col},${a})`;g.fillRect(xx,yy,sx*.55,sy*.4);}}}
+  for(let yy=top+4;yy<WL-2;yy+=sy){if(R()<.14)continue;for(let xx=l+2;xx<r-2;xx+=sx){if(R()>=dens){if(R2()<DARK_SHARE){const on=Math.random()<.3;twinkles.push({x:xx,y:yy,w:sx*.55,h:sy*.4,col:pal[R2()*pal.length|0],peak:.55+R2()*.35,on,a:on?1:0,left:Math.random()*15,fade:1});}continue;}const col=pal[R()*pal.length|0],a=.35+R()*.6;if(R2()<WINDOW_SHARE){const on=Math.random()<.6;twinkles.push({x:xx,y:yy,w:sx*.55,h:sy*.4,col,peak:Math.max(.6,a),on,a:on?1:0,left:Math.random()*15,fade:1});continue;}g.fillStyle=`rgba(${col},${a})`;g.fillRect(xx,yy,sx*.55,sy*.4);}}}
  g.restore();
  g.save();g.globalCompositeOperation='lighter';g.strokeStyle='rgba(255,140,110,.16)';g.lineWidth=1;g.beginPath();POLY.forEach(([a,b],i)=>i?g.lineTo(a*k,WL-(BASE-b)*k):g.moveTo(a*k,WL-(BASE-b)*k));g.stroke();
  gr=g.createLinearGradient(0,WL-26*k,0,WL);gr.addColorStop(0,'rgba(255,150,90,0)');gr.addColorStop(1,'rgba(255,150,90,.2)');g.fillStyle=gr;g.fillRect(0,WL-26*k,cityW,26*k);g.restore();
@@ -119,11 +120,17 @@ function frame(now){
  stepTwinkles(dt);drawTwinkles(off);
  // water: the prebuilt reflection drawn in bands, each nudged sideways by a moving ripple
  x.fillStyle='#030409';x.fillRect(0,WL,W,dep);
+ // lightning on the water: the surface brightens, strongest near the shore, and the bolt
+ // shows mirrored and wavering; the city's reflection is drawn over it, as the towers stand in front of the bolt
+ if(flash>0){const wg=x.createLinearGradient(0,WL,0,H);wg.addColorStop(0,`rgba(170,160,210,${flash*.32})`);wg.addColorStop(1,`rgba(170,160,210,${flash*.06})`);x.fillStyle=wg;x.fillRect(0,WL,W,dep);
+  x.save();x.globalCompositeOperation='lighter';x.lineCap='round';
+  const ry=y=>WL+(WL-y)*.85,rx=(xx,yy)=>{const d=(yy-WL)/dep;return xx+Math.sin((yy-WL)*.21+t*RIPPLE_SPEED)*(1+d*5)+Math.sin((yy-WL)*.07-t*RIPPLE_SPEED*.55)*d*3;};
+  for(const s of bolt.seg){const y1=ry(s[1]),y2=ry(s[3]);if(y2>H&&y1>H)continue;const fade=Math.max(0,1-.5*((y1+y2)/2-WL)/dep);x.strokeStyle=`rgba(230,225,255,${flash*.95*fade})`;x.lineWidth=2.2;x.beginPath();x.moveTo(rx(s[0],y1),y1);x.lineTo(rx(s[2],y2),y2);x.stroke();}
+  x.restore();}
  const band=6,rh=L.refl.h;for(let yy=0;yy<rh;yy+=band){const d=yy/dep,o=Math.sin(yy*.21+t*RIPPLE_SPEED)*(1+d*5)+Math.sin(yy*.07-t*RIPPLE_SPEED*.55)*d*3;x.drawImage(L.refl,0,yy*DPR,L.refl.width,band*DPR,off+o,WL+yy,cityW,band);}
  x.globalCompositeOperation='lighter';
  for(const s of L.streaks){const sx=s.x+off;if(sx<-30||sx>W+30)continue;x.globalAlpha=.7+.3*Math.sin(t*SHIMMER_SPEED+s.x);x.drawImage(s.cv,sx-s.cv.w/2+Math.sin(t*SHIMMER_SPEED*.7+s.x)*1.5,WL,s.cv.w,s.cv.h);}
  x.globalAlpha=1;x.globalCompositeOperation='source-over';
- if(flash>0){x.fillStyle=`rgba(170,160,210,${flash*.12})`;x.fillRect(0,WL,W,dep);}
  x.drawImage(L.over,0,0,W,H);
  // rain in three depth layers, one stroke each
  x.lineCap='round';
